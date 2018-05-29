@@ -271,6 +271,3 @@ async function getAwsSessionForEntry(entry: { arn: string, role?: string }): Pro
       throw new SopsError(`Unable to switch roles ${err}`);
     }
 }
-
-// main
-decodeFile('secure.enc.json').then(v => console.log(JSON.stringify(v, undefined, 2)));

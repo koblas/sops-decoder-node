@@ -1,6 +1,6 @@
 {
   "name": "sops-decoder",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "SOPS Decoder for JavaScript (Node)",
   "main": "./build/decode.js",
   "types": "./build/index.d.ts",
