@@ -1,9 +1,9 @@
 {
   "name": "sops-decoder",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "SOPS Decoder for JavaScript (Node)",
   "main": "./build/decode.js",
-  "types": "./build/index.d.ts",
+  "types": "./build/decode.d.ts",
   "keywords": [
     "sops",
     "secure"
