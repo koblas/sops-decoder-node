@@ -24,7 +24,6 @@
         "types": ["node"],
         "module": "commonjs",
         "target": "es6",
-        "inlineSourceMap": true,
         "strictNullChecks": true
     }
 }
