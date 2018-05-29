@@ -2,6 +2,8 @@
 
 This is a decoder for [SOPS](https://github.com/mozilla/sops) encoded files. This lightweight encoder makes it easy to embed in your AWS Lambda functions or Docker images without having to bring along the whole Go package.
 
+*Note: The ```deocodeFile()``` method only supports JSON input.*
+
 ## Installation
 
     npm install --save sops-decoder
@@ -28,7 +30,7 @@ This is a decoder for [SOPS](https://github.com/mozilla/sops) encoded files. Thi
     }
 
     //
-    // Take the given path and read the file contents and then call decode on the result
+    // Take the given path as JSON and read the file contents and then call decode on the result
     //
     decodeFile(path: string): Promise<Tree>
 
@@ -41,6 +43,5 @@ This is a decoder for [SOPS](https://github.com/mozilla/sops) encoded files. Thi
 
 ### TODO
 
-[ ] PGP Key support
-[ ] Unit Testing
-[ ] YAML support for decodeFile()
+- [ ] PGP Key support
+- [ ] Unit Testing

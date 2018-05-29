@@ -1,0 +1,26 @@
+version: 2
+
+jobs:
+  build:
+    docker:
+      - image: circleci/node:8.1.4
+
+    steps:
+      - checkout
+
+      - run:
+          name: "Install packages"
+          command: "npm install"
+
+      - run:
+          name: "Integration tests"
+          command: "npm test"
+
+      - run:
+          name: "Build distribution"
+          command: |
+            if [[ $CIRCLE_BRANCH = master ]]; then
+              echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+              npm run build
+              npm publish --access public
+            fi
