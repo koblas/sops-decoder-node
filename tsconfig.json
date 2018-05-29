@@ -1,0 +1,30 @@
+{
+    "files": [
+        "src/decode.ts",
+    ],
+    "exclude": [
+        "node_modules",
+        "build",
+        "spec"
+    ],
+    "compilerOptions": {
+        "alwaysStrict": true,
+        "noEmitOnError": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitReturns": true,
+        "noUnusedLocals": true,
+
+        "declaration": true,
+        "outDir": "build",
+        "experimentalDecorators": true,
+        "noImplicitAny": true,
+        "moduleResolution": "node",
+        "allowJs": false,
+        "lib": ["es2017", "es2015", "es2016"],
+        "types": ["node"],
+        "module": "commonjs",
+        "target": "es6",
+        "inlineSourceMap": true,
+        "strictNullChecks": true
+    }
+}

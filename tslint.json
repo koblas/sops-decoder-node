@@ -1,0 +1,72 @@
+{
+  "extends": [
+    "tslint-microsoft-contrib",
+    "tslint-eslint-rules"
+  ],
+  "rules": {
+    "max-line-length": [true, 160],
+    "quotemark": [false],
+    "no-floating-promises": [true],
+    "align": [true, "parameters", "statements"],
+    "no-redundant-jsdoc": [false],
+    "switch-final-break": [false],
+    "no-implicit-dependencies": [false],
+    "no-submodule-imports": [false],
+    "no-return-await": [false],
+
+    "brace-style": [
+      true,
+      "1tbs",
+      {
+        "allowSingleLine": true
+      }
+    ],
+    "array-bracket-spacing": [
+      true,
+      "never"
+    ], // 18.10
+    "object-curly-spacing": [
+      true,
+      "always"
+    ], // 18.11
+    "space-in-parens": [true, "never"],
+    "array-bracket-spacing": [
+      true,
+      "never"
+    ], // 18.10
+    "variable-name": [
+      true,
+      "check-format" // 22.2
+    ],
+
+    "typedef": [false],
+    "missing-jsdoc": [false],
+    "no-backbone-get-set-outside-model": [false],
+    "strict-boolean-expressions": [false],
+    "no-unsafe-any": [false],
+    "no-suspicious-comment": [false],
+    "no-relative-imports": [false],
+    "ordered-imports": [false],
+    "interface-name": [false],
+    "no-empty-interface": [false],
+    "export-name": [false],
+    "no-default-export": [false],
+    "no-any": [false],
+    "prefer-type-cast": [false],
+    "member-access": [false],
+    "no-reserved-keywords": [false],
+    "completed-docs": [false],
+    "await-promise": [true, "Bluebird"],
+    "switch-default": [false],
+    "no-string-based-set-timeout": [false],
+    "no-unused-expression": [false],
+    "chai-vague-errors": [false],
+    "trailing-comma": [
+      true,
+      {
+        "multiline": "always",
+        "singleline": "never"
+      }
+    ]
+  }
+}
