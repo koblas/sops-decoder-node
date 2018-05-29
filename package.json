@@ -1,9 +1,13 @@
 {
-  "name": "sops-decode",
-  "version": "0.9.1",
+  "name": "sops-decoder",
+  "version": "0.9.0",
   "description": "SOPS Decoder for JavaScript (Node)",
   "main": "./build/decode.js",
   "types": "./build/index.d.ts",
+  "keywords": [
+    "sops",
+    "secure"
+  ],
   "scripts": {
     "test": "true",
     "build": "tsc"
@@ -12,7 +16,11 @@
     "src",
     "build"
   ],
-  "author": "David Koblas",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/koblas/sops-decoder-node"
+  },
+  "author": "David Koblas <david@koblas.com>",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^10.1.3",
