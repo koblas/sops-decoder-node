@@ -14,11 +14,13 @@ This is a decoder for [SOPS](https://github.com/mozilla/sops) encoded files. Thi
     const sopsDecode = require('sops-decoder');
 
     try {
-      const data = await sopsDecode.decodeFile('secure.json.enc');
+      const data = await sopsDecode.decodeFile('secure.enc.json');
 
       // do something with the data
+      console.log(JSON.stringify(data, undefined, 2));
     } catch (err) {
-      // log a great error
+      // Handle the error (SopsException)
+      console.log(err);
     }
 
 ```
