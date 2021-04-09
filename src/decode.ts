@@ -106,12 +106,8 @@ export async function decrypt(tree: EncodedTree) {
   }
 
   const key = await getKey(tree);
-<<<<<<< HEAD
 
   const encryption_modifier: EncryptionModifier = getEncryptionModifier(sops)
-=======
-  const unencryptedSuffx = sops.unencrypted_suffix || UNENCRYPTED_SUFFIX;
->>>>>>> 7eae83543aae8c925711f954eb0b5055935b1dbd
 
   if (key === null) {
     throw new SopsError("missing key");
@@ -119,19 +115,7 @@ export async function decrypt(tree: EncodedTree) {
 
   const digest = crypto.createHash("sha512");
 
-<<<<<<< HEAD
   const result = walkAndDecrypt(tree, key, '', digest, true, false, encryption_modifier);
-=======
-  const result = walkAndDecrypt(
-    tree,
-    key,
-    "",
-    digest,
-    true,
-    false,
-    unencryptedSuffx,
-  );
->>>>>>> 7eae83543aae8c925711f954eb0b5055935b1dbd
 
   if (sops.mac) {
     const hash: string = decryptScalar(
@@ -229,7 +213,6 @@ export function decryptScalar(
   }
 }
 
-<<<<<<< HEAD
 function walkAndDecrypt(tree: EncodedTree, key: Buffer, aad='', digest: crypto.Hash, isRoot=true, unencrypted=false, encryption_modifier: EncryptionModifier): any {
   const doValue = (value: any, caad: string, unencrypted_branch: boolean): any => {
     if (Array.isArray(value)) {
@@ -238,36 +221,6 @@ function walkAndDecrypt(tree: EncodedTree, key: Buffer, aad='', digest: crypto.H
       return walkAndDecrypt(value, key, caad, digest, false, unencrypted_branch, encryption_modifier);
     } else {
       return decryptScalar(value, key, caad, digest, unencrypted_branch);
-=======
-function walkAndDecrypt(
-  tree: EncodedTree,
-  key: Buffer,
-  aad = "",
-  digest: crypto.Hash,
-  isRoot = true,
-  unencrypted = false,
-  unencrypted_suffx: string,
-): any {
-  const doValue = (
-    value: any,
-    caad: string,
-    unencrypted_branch: boolean,
-  ): any => {
-    if (Array.isArray(value)) {
-      return value.map((vv) => doValue(vv, caad, unencrypted_branch));
-    }
-
-    if (typeof value === "object") {
-      return walkAndDecrypt(
-        value,
-        key,
-        caad,
-        digest,
-        false,
-        unencrypted_branch,
-        unencrypted_suffx,
-      );
->>>>>>> 7eae83543aae8c925711f954eb0b5055935b1dbd
     }
 
     return decryptScalar(value, key, caad, digest, unencrypted_branch);
@@ -281,15 +234,7 @@ function walkAndDecrypt(
       return;
     }
 
-<<<<<<< HEAD
     result[k] = doValue(value, `${aad}${k}:`, unencrypted || encryption_modifier.testKeyEncryption(k));
-=======
-    result[k] = doValue(
-      value,
-      `${aad}${k}:`,
-      unencrypted || k.endsWith(unencrypted_suffx),
-    );
->>>>>>> 7eae83543aae8c925711f954eb0b5055935b1dbd
   });
 
   return result;
@@ -404,10 +349,7 @@ async function getAwsSessionForEntry(entry: {
     } catch (err) {
       throw new SopsError("failed to initialize KMS client");
     }
-<<<<<<< HEAD
-=======
   } catch (err) {
     throw new SopsError(`Unable to switch roles ${err}`);
   }
->>>>>>> 7eae83543aae8c925711f954eb0b5055935b1dbd
 }
