@@ -31,10 +31,14 @@ export interface EncodedTree {
   [key: string]: any;
 }
 type EncryptionModifier = (key: string) => boolean;
-const checkEncryptedSuffix = (modifier: string) => (key: string) => !key.endsWith(modifier);
-const checkUnencryptedSuffix = (modifier: string) => (key: string) => key.endsWith(modifier);
-const checkUnencryptedRegex = (modifier: string) => (key: string) =>  new RegExp(modifier).test(key);
-const checkEncryptedRegex = (modifier: string) => (key: string) =>  !(new RegExp(modifier).test(key));;
+const checkEncryptedSuffix = (modifier: string) => (key: string) =>
+  !key.endsWith(modifier);
+const checkUnencryptedSuffix = (modifier: string) => (key: string) =>
+  key.endsWith(modifier);
+const checkUnencryptedRegex = (modifier: string) => (key: string) =>
+  new RegExp(modifier).test(key);
+const checkEncryptedRegex = (modifier: string) => (key: string) =>
+  !new RegExp(modifier).test(key);
 
 /**
  * Read the given file from the FileSytem and return the decoded data
@@ -123,10 +127,10 @@ function getEncryptionModifier(
     return checkEncryptedRegex(sops?.encrypted_regex);
   }
   if (sops?.encrypted_suffix) {
-    return checkEncryptedSuffix(sops?.encrypted_suffix)
+    return checkEncryptedSuffix(sops?.encrypted_suffix);
   }
   if (sops?.unencrypted_regex) {
-    return checkUnencryptedRegex(sops?.unencrypted_regex)
+    return checkUnencryptedRegex(sops?.unencrypted_regex);
   }
   return checkUnencryptedSuffix(sops?.unencrypted_suffix || UNENCRYPTED_SUFFIX);
 }
