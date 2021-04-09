@@ -137,6 +137,7 @@ function toBytes(value: string | Buffer): string {
 
   return value;
 }
+
 // Given a sops config, return the appropriate encryption modifier
 function getEncryptionModifier(sops: SopsMetadata | undefined): EncryptionModifier {
   if (sops?.encrypted_regex) {
