@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "test": "true",
+    "lint": "eslint src --ext .ts",
     "build": "tsc"
   },
   "files": [
@@ -22,8 +23,22 @@
   },
   "author": "David Koblas <david@koblas.com>",
   "license": "MIT",
+  "prettier": {
+    "trailingComma": "all"
+  },
   "devDependencies": {
     "@types/node": "^14.14.37",
+<<<<<<< HEAD
+=======
+    "@typescript-eslint/eslint-plugin": "^4.21.0",
+    "@typescript-eslint/parser": "^4.21.0",
+    "eslint": "^7.23.0",
+    "eslint-config-airbnb-typescript": "^12.3.1",
+    "eslint-config-prettier": "^8.1.0",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-prettier": "^3.3.1",
+    "prettier": "^2.2.1",
+>>>>>>> 7eae83543aae8c925711f954eb0b5055935b1dbd
     "ts-node": "^9.1.1",
     "typescript": "^4.2.4"
   },
