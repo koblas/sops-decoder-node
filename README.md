@@ -2,7 +2,7 @@
 
 [![NPM Version](http://img.shields.io/npm/v/sops-decoder.svg?style=flat)](https://www.npmjs.org/package/sops-decoder)
 [![NPM Downloads](https://img.shields.io/npm/dm/sops-decoder.svg?style=flat)](https://npmcharts.com/compare/sops-decoder?minimal=true)
-[![Build Status](https://github.com/koblas/sops-decoder-node/actions/workflows/main/badge.svg)]
+![Build Status](https://github.com/koblas/sops-decoder-node/actions/workflows/main.yaml/badge.svg)
 
 This is a decoder for [SOPS](https://github.com/mozilla/sops) encoded files. This lightweight encoder makes it easy to embed in your AWS Lambda functions or Docker images without having to bring along the whole Go package.
 
