@@ -21,12 +21,24 @@ export interface SopsMetadata {
   lastmodified: string;
   version: string;
   unencrypted_suffix?: string;
+  encrypted_suffix?: string;
+  unencrypted_regex?: string;
+  encrypted_regex?: string;
 }
 
 export interface EncodedTree {
   sops?: SopsMetadata;
   [key: string]: any;
 }
+type EncryptionModifier = (key: string) => boolean;
+const checkEncryptedSuffix = (modifier: string) => (key: string) =>
+  !key.endsWith(modifier);
+const checkUnencryptedSuffix = (modifier: string) => (key: string) =>
+  key.endsWith(modifier);
+const checkUnencryptedRegex = (modifier: string) => (key: string) =>
+  new RegExp(modifier).test(key);
+const checkEncryptedRegex = (modifier: string) => (key: string) =>
+  !new RegExp(modifier).test(key);
 
 /**
  * Read the given file from the FileSytem and return the decoded data
@@ -62,7 +74,8 @@ export async function decrypt(tree: EncodedTree) {
   }
 
   const key = await getKey(tree);
-  const unencryptedSuffx = sops.unencrypted_suffix || UNENCRYPTED_SUFFIX;
+
+  const encryptionModifier: EncryptionModifier = getEncryptionModifier(sops);
 
   if (key === null) {
     throw new SopsError("missing key");
@@ -77,7 +90,7 @@ export async function decrypt(tree: EncodedTree) {
     digest,
     true,
     false,
-    unencryptedSuffx,
+    encryptionModifier,
   );
 
   if (sops.mac) {
@@ -104,6 +117,22 @@ function toBytes(value: string | Buffer): string {
   }
 
   return value;
+}
+
+// Given a sops config, return the appropriate encryption modifier
+function getEncryptionModifier(
+  sops: SopsMetadata | undefined,
+): EncryptionModifier {
+  if (sops?.encrypted_regex) {
+    return checkEncryptedRegex(sops?.encrypted_regex);
+  }
+  if (sops?.encrypted_suffix) {
+    return checkEncryptedSuffix(sops?.encrypted_suffix);
+  }
+  if (sops?.unencrypted_regex) {
+    return checkUnencryptedRegex(sops?.unencrypted_regex);
+  }
+  return checkUnencryptedSuffix(sops?.unencrypted_suffix || UNENCRYPTED_SUFFIX);
 }
 
 /**
@@ -171,7 +200,7 @@ function walkAndDecrypt(
   digest: crypto.Hash,
   isRoot = true,
   unencrypted = false,
-  unencrypted_suffx: string,
+  encryptionModifier: EncryptionModifier,
 ): any {
   const doValue = (
     value: any,
@@ -181,7 +210,6 @@ function walkAndDecrypt(
     if (Array.isArray(value)) {
       return value.map((vv) => doValue(vv, caad, unencrypted_branch));
     }
-
     if (typeof value === "object") {
       return walkAndDecrypt(
         value,
@@ -190,10 +218,9 @@ function walkAndDecrypt(
         digest,
         false,
         unencrypted_branch,
-        unencrypted_suffx,
+        encryptionModifier,
       );
     }
-
     return decryptScalar(value, key, caad, digest, unencrypted_branch);
   };
 
@@ -208,7 +235,7 @@ function walkAndDecrypt(
     result[k] = doValue(
       value,
       `${aad}${k}:`,
-      unencrypted || k.endsWith(unencrypted_suffx),
+      unencrypted || encryptionModifier(k),
     );
   });
 
