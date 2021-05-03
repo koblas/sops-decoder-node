@@ -112,7 +112,7 @@ export async function decrypt(tree: EncodedTree) {
 
 // Convert to a string value
 function toBytes(value: string | Buffer): string {
-  if(typeof value === "boolean"){
+  if (typeof value === "boolean"){
     return value === true ? 'True' : 'False';
   }else if (typeof value !== "string") {
     return value.toString();
