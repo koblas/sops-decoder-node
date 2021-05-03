@@ -114,7 +114,7 @@ export async function decrypt(tree: EncodedTree) {
 function toBytes(value: string | Buffer): string {
   if (typeof value === "boolean"){
     return value === true ? 'True' : 'False';
-  }else if (typeof value !== "string") {
+  } else if (typeof value !== "string") {
     return value.toString();
   }
 
