@@ -112,7 +112,9 @@ export async function decrypt(tree: EncodedTree) {
 
 // Convert to a string value
 function toBytes(value: string | Buffer): string {
-  if (typeof value !== "string") {
+  if (typeof value === "boolean"){
+    return value === true ? 'True' : 'False';
+  } else if (typeof value !== "string") {
     return value.toString();
   }
 
@@ -187,7 +189,7 @@ export function decryptScalar(
     case "float":
       return parseFloat(cleartext);
     case "bool":
-      return cleartext === "true";
+      return cleartext.toLowerCase() === "true";
     default:
       throw new SopsError(`Unknown type ${valtype}`);
   }
@@ -217,7 +219,7 @@ function walkAndDecrypt(
         caad,
         digest,
         false,
-        unencrypted_branch,
+        false,
         encryptionModifier,
       );
     }
