@@ -189,7 +189,7 @@ export function decryptScalar(
     case "float":
       return parseFloat(cleartext);
     case "bool":
-      return cleartext === "True";
+      return cleartext.toLowerCase() === "true";
     default:
       throw new SopsError(`Unknown type ${valtype}`);
   }
