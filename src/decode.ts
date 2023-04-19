@@ -219,7 +219,7 @@ function walkAndDecrypt(
         caad,
         digest,
         false,
-        false,
+        unencrypted_branch,
         encryptionModifier,
       );
     }
