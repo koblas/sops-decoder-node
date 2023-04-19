@@ -19,10 +19,28 @@
   ],
   "repository": {
     "type": "git",
-    "url": "http://github.com/koblas/sops-decoder-node"
+    "url": "http://github.com/koblas/sops-decoder-node.git"
   },
   "author": "David Koblas <david@koblas.com>",
   "license": "MIT",
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/npm",
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "package.json"
+          ],
+          "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+        }
+      ]
+    ]
+  },
   "prettier": {
     "trailingComma": "all"
   },
