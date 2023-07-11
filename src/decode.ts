@@ -1,9 +1,18 @@
 import * as crypto from "crypto";
 import * as os from "os";
-import * as aws from "aws-sdk";
 import * as fs from "fs";
+import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
+import { DecryptCommand, KMSClient } from "@aws-sdk/client-kms";
 
 const UNENCRYPTED_SUFFIX = "_unencrypted";
+
+// Why doesn't the JSON methods return this...
+export type Json = string | number | boolean | null | JsonObject | JsonArray;
+
+export type JsonArray = Array<Json>;
+export interface JsonObject {
+  [property: string]: Json;
+}
 
 export class SopsError extends Error {}
 
@@ -12,7 +21,7 @@ export interface KmsData {
   created_at: string;
   enc: string;
   role?: string;
-  context?: any;
+  context?: Record<string, string>;
 }
 
 export interface SopsMetadata {
@@ -27,9 +36,10 @@ export interface SopsMetadata {
 }
 
 export interface EncodedTree {
-  sops?: SopsMetadata;
-  [key: string]: any;
+  // sops?: SopsMetadata;
+  [property: string]: Json | undefined;
 }
+
 type EncryptionModifier = (key: string) => boolean;
 const checkEncryptedSuffix = (modifier: string) => (key: string) =>
   !key.endsWith(modifier);
@@ -56,9 +66,12 @@ export async function decodeFile(path: string) {
     });
   });
 
-  const tree = JSON.parse(data.toString());
+  const tree: Json = JSON.parse(data.toString());
 
-  return decrypt(tree);
+  if (typeof tree === "object" && !Array.isArray(tree) && tree !== null) {
+    return decrypt(tree);
+  }
+  return tree;
 }
 
 /**
@@ -66,8 +79,8 @@ export async function decodeFile(path: string) {
  *
  * @param tree data previous read
  */
-export async function decrypt(tree: EncodedTree) {
-  const { sops } = tree;
+export async function decrypt(tree: JsonObject) {
+  const { sops } = tree as { sops?: SopsMetadata };
 
   if (!sops) {
     return tree;
@@ -94,12 +107,8 @@ export async function decrypt(tree: EncodedTree) {
   );
 
   if (sops.mac) {
-    const hash: string = decryptScalar(
-      sops.mac,
-      key,
-      sops.lastmodified,
-      null,
-      false,
+    const hash = String(
+      decryptScalar(sops.mac, key, sops.lastmodified, null, false),
     );
 
     if (hash.toUpperCase() !== digest.digest("hex").toUpperCase()) {
@@ -111,11 +120,15 @@ export async function decrypt(tree: EncodedTree) {
 }
 
 // Convert to a string value
-function toBytes(value: string | Buffer): string {
-  if (typeof value === "boolean"){
-    return value === true ? 'True' : 'False';
+function toBytes(value: unknown): string {
+  if (value === undefined || value === null) {
+    return "";
+  } else if (typeof value === "boolean") {
+    return value === true ? "True" : "False";
   } else if (typeof value !== "string") {
-    return value.toString();
+    return typeof value?.toString === "function"
+      ? value.toString()
+      : String(value);
   }
 
   return value;
@@ -141,12 +154,12 @@ function getEncryptionModifier(
  *  Decrypt a single value, update the digest if provided
  */
 export function decryptScalar(
-  value: any,
+  value: string | boolean | number,
   key: Buffer,
   aad: string,
   digest: crypto.Hash | null,
   unencrypted: boolean,
-) {
+): string | boolean | number {
   if (unencrypted || typeof value !== "string") {
     if (digest) {
       digest.update(toBytes(value));
@@ -198,23 +211,23 @@ export function decryptScalar(
 function walkAndDecrypt(
   tree: EncodedTree,
   key: Buffer,
-  aad = "",
+  aad: string,
   digest: crypto.Hash,
-  isRoot = true,
-  unencrypted = false,
+  isRoot: boolean,
+  unencrypted: boolean,
   encryptionModifier: EncryptionModifier,
-): any {
+): unknown {
   const doValue = (
-    value: any,
+    value: Json,
     caad: string,
     unencrypted_branch: boolean,
-  ): any => {
+  ): unknown => {
     if (Array.isArray(value)) {
       return value.map((vv) => doValue(vv, caad, unencrypted_branch));
     }
     if (typeof value === "object") {
       return walkAndDecrypt(
-        value,
+        value as EncodedTree,
         key,
         caad,
         digest,
@@ -229,7 +242,7 @@ function walkAndDecrypt(
   const result: { [key: string]: any } = {};
 
   Object.entries(tree).forEach(([k, value]) => {
-    if (k === "sops" && isRoot) {
+    if ((k === "sops" && isRoot) || value === undefined) {
       // The top level 'sops' node is ignored since it's the internal configuration
       return;
     }
@@ -250,11 +263,13 @@ function walkAndDecrypt(
  * @param tree
  */
 async function getKey(tree: EncodedTree): Promise<Buffer | null> {
-  if (!tree.sops || !tree.sops.kms) {
+  const { sops } = tree as { sops?: SopsMetadata };
+
+  if (!sops || !sops.kms) {
     return null;
   }
 
-  const kmsTree = tree.sops.kms;
+  const kmsTree = sops.kms;
 
   if (!Array.isArray(kmsTree)) {
     return null;
@@ -273,12 +288,12 @@ async function getKey(tree: EncodedTree): Promise<Buffer | null> {
       const kms = await getAwsSessionForEntry(entry);
 
       // eslint-disable-next-line no-await-in-loop
-      const response = await kms
-        .decrypt({
-          CiphertextBlob: Buffer.from(entry.enc, "base64"),
-          EncryptionContext: entry.context || {},
-        })
-        .promise();
+      const command = new DecryptCommand({
+        CiphertextBlob: Buffer.from(entry.enc, "base64"),
+        EncryptionContext: entry.context || {},
+      });
+
+      const response = await kms.send(command);
 
       if (!response.Plaintext || !(response.Plaintext instanceof Buffer)) {
         throw new SopsError("Invalid response");
@@ -300,7 +315,7 @@ async function getKey(tree: EncodedTree): Promise<Buffer | null> {
 async function getAwsSessionForEntry(entry: {
   arn: string;
   role?: string;
-}): Promise<aws.KMS> {
+}): Promise<KMSClient> {
   // extract the region from the ARN
   // arn:aws:kms:{REGION}:...
   const res = entry.arn.match(/^arn:aws:kms:(.+):([0-9]+):key\/(.+)$/);
@@ -318,7 +333,7 @@ async function getAwsSessionForEntry(entry: {
   if (!entry.role) {
     // if there are no role to assume, return the client directly
     try {
-      const client = new aws.KMS({ region });
+      const client = new KMSClient({ region });
       return client;
     } catch (err) {
       throw new SopsError(`Unable to get boto3 client in ${region}`);
@@ -327,29 +342,33 @@ async function getAwsSessionForEntry(entry: {
 
   // otherwise, create a client using temporary tokens that assume the role
   try {
-    const client = new aws.STS();
-    const role = await client
-      .assumeRole({
-        RoleArn: entry.role,
-        RoleSessionName: `sops@${os.hostname()}`,
-      })
-      .promise();
+    const stsClient = new STSClient({ region });
+
+    const command = new AssumeRoleCommand({
+      RoleArn: entry.role,
+      RoleSessionName: `sops@${os.hostname()}`,
+    });
+    const role = await stsClient.send(command);
 
     try {
       const credentials = role.Credentials;
       if (!credentials) {
         throw new Error("missing credentails");
       }
-      const keyid = credentials.AccessKeyId;
-      const secretkey = credentials.SecretAccessKey;
-      const token = credentials.SessionToken;
+      const accessKeyId = credentials.AccessKeyId;
+      const secretAccessKey = credentials.SecretAccessKey;
+      const sessionToken = credentials.SessionToken;
 
-      return new aws.KMS({
+      if (!accessKeyId || !secretAccessKey) {
+        throw new Error("missing credentail values");
+      }
+
+      const client = new KMSClient({
         region,
-        accessKeyId: keyid,
-        secretAccessKey: secretkey,
-        sessionToken: token,
+        credentials: { accessKeyId, secretAccessKey, sessionToken },
       });
+
+      return client;
     } catch (err) {
       throw new SopsError("failed to initialize KMS client");
     }
