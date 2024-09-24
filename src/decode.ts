@@ -40,15 +40,19 @@ export interface EncodedTree {
   [property: string]: Json | undefined;
 }
 
-type EncryptionModifier = (key: string) => boolean;
-const checkEncryptedSuffix = (modifier: string) => (key: string) =>
-  !key.endsWith(modifier);
-const checkUnencryptedSuffix = (modifier: string) => (key: string) =>
-  key.endsWith(modifier);
-const checkUnencryptedRegex = (modifier: string) => (key: string) =>
-  new RegExp(modifier).test(key);
-const checkEncryptedRegex = (modifier: string) => (key: string) =>
-  !new RegExp(modifier).test(key);
+type EncryptionModifier = (path: string[]) => boolean;
+const checkEncryptedSuffix = (modifier: string) => (path: string[]) =>
+  path.some((key) => key.endsWith(modifier));
+const checkUnencryptedSuffix = (modifier: string) => (path: string[]) =>
+  !path.some((key) => key.endsWith(modifier));
+const checkUnencryptedRegex = (modifier: string) => {
+  const re = new RegExp(modifier);
+  return (path: string[]) => !path.some((key) => re.test(key));
+};
+const checkEncryptedRegex = (modifier: string) => {
+  const re = new RegExp(modifier);
+  return (path: string[]) => path.some((key) => re.test(key));
+};
 
 /**
  * Read the given file from the FileSytem and return the decoded data
@@ -88,7 +92,7 @@ export async function decrypt(tree: JsonObject) {
 
   const key = await getKey(tree);
 
-  const encryptionModifier: EncryptionModifier = getEncryptionModifier(sops);
+  const shouldBeEncrypted: EncryptionModifier = getEncryptionModifier(sops);
 
   if (key === null) {
     throw new SopsError("missing key");
@@ -96,20 +100,10 @@ export async function decrypt(tree: JsonObject) {
 
   const digest = crypto.createHash("sha512");
 
-  const result = walkAndDecrypt(
-    tree,
-    key,
-    "",
-    digest,
-    true,
-    false,
-    encryptionModifier,
-  );
+  const result = walkAndDecrypt(tree, key, "", digest, [], shouldBeEncrypted);
 
   if (sops.mac) {
-    const hash = String(
-      decryptScalar(sops.mac, key, sops.lastmodified, null, false),
-    );
+    const hash = String(decryptScalar(sops.mac, key, sops.lastmodified));
 
     if (hash.toUpperCase() !== digest.digest("hex").toUpperCase()) {
       throw new Error("Hash mismatch");
@@ -154,20 +148,10 @@ function getEncryptionModifier(
  *  Decrypt a single value, update the digest if provided
  */
 export function decryptScalar(
-  value: string | boolean | number,
-  key: Buffer,
+  value: string,
+  key: Uint8Array,
   aad: string,
-  digest: crypto.Hash | null,
-  unencrypted: boolean,
 ): string | boolean | number {
-  if (unencrypted || typeof value !== "string") {
-    if (digest) {
-      digest.update(toBytes(value));
-    }
-
-    return value;
-  }
-
   const valre = value.match(
     /^ENC\[AES256_GCM,data:(.+),iv:(.+),tag:(.+),type:(.+)\]/,
   );
@@ -188,10 +172,6 @@ export function decryptScalar(
   const cleartext =
     decryptor.update(encValue, undefined, "utf8") + decryptor.final("utf8");
 
-  if (digest) {
-    digest.update(cleartext);
-  }
-
   switch (valtype) {
     case "bytes":
       return cleartext;
@@ -209,60 +189,49 @@ export function decryptScalar(
 }
 
 function walkAndDecrypt(
-  tree: EncodedTree,
-  key: Buffer,
+  value: Json,
+  key: Uint8Array,
   aad: string,
   digest: crypto.Hash,
-  isRoot: boolean,
-  unencrypted: boolean,
-  encryptionModifier: EncryptionModifier,
+  path: string[],
+  shouldBeEncrypted: EncryptionModifier,
 ): unknown {
-  const doValue = (
-    value: Json,
-    caad: string,
-    unencrypted_branch: boolean,
-  ): unknown => {
-    if (Array.isArray(value)) {
-      return value.map((vv) => doValue(vv, caad, unencrypted_branch));
-    }
-    if (typeof value === "object") {
-      return walkAndDecrypt(
-        value as EncodedTree,
-        key,
-        caad,
-        digest,
-        false,
-        unencrypted_branch,
-        encryptionModifier,
-      );
-    }
-    return decryptScalar(value, key, caad, digest, unencrypted_branch);
-  };
-
-  const result: { [key: string]: any } = {};
-
-  Object.entries(tree).forEach(([k, value]) => {
-    if ((k === "sops" && isRoot) || value === undefined) {
-      // The top level 'sops' node is ignored since it's the internal configuration
-      return;
-    }
-
-    result[k] = doValue(
-      value,
-      `${aad}${k}:`,
-      unencrypted || encryptionModifier(k),
+  if (value === null) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((innerValue) =>
+      walkAndDecrypt(innerValue, key, aad, digest, path, shouldBeEncrypted),
     );
-  });
-
-  return result;
-}
+  }
+  if (typeof value === "object") {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([k, v]) => v !== undefined && (path.length > 0 || k !== "sops"))
+      .map(([k, innerValue]) => [
+        k,
+        walkAndDecrypt(
+          innerValue,
+          key,
+          `${aad}${k}:`,
+          digest,
+          [...path, k],
+          shouldBeEncrypted,
+        )
+      ]));
+  }
+  const plaintext = typeof value === 'string' && shouldBeEncrypted(path)
+    ? decryptScalar(value, key, aad)
+    : value;
+  digest.update(toBytes(plaintext));
+  return plaintext;
+};
 
 /**
  * Get the key from the 'sops.kms' node of the tree
  *
  * @param tree
  */
-async function getKey(tree: EncodedTree): Promise<Buffer | null> {
+async function getKey(tree: EncodedTree): Promise<Uint8Array | null> {
   const { sops } = tree as { sops?: SopsMetadata };
 
   if (!sops || !sops.kms) {
@@ -275,15 +244,15 @@ async function getKey(tree: EncodedTree): Promise<Buffer | null> {
     return null;
   }
 
+  const errors: string[] = [];
+
   // eslint-disable-next-line no-restricted-syntax
   for (const entry of kmsTree) {
-    if (!entry.enc || !entry.arn) {
-      // Invalid format for a KMS node
-      // eslint-disable-next-line no-continue
-      continue;
-    }
-
     try {
+      if (!entry.enc || !entry.arn) {
+        throw new SopsError(`Invalid format for KMS node: ${JSON.stringify(entry)}`);
+      }
+
       // eslint-disable-next-line no-await-in-loop
       const kms = await getAwsSessionForEntry(entry);
 
@@ -295,16 +264,19 @@ async function getKey(tree: EncodedTree): Promise<Buffer | null> {
 
       const response = await kms.send(command);
 
-      if (!response.Plaintext || !(response.Plaintext instanceof Buffer)) {
-        throw new SopsError("Invalid response");
+      if (!response.Plaintext || !(response.Plaintext instanceof Uint8Array)) {
+        throw new SopsError("Invalid plaintext in KMS response");
       }
 
       return response.Plaintext;
-    } catch (err) {
-      // log it
+    } catch(error) {
+      const [errorType, errorText] = error instanceof Error ? [error.name, error.message] : ['UnknownError', JSON.stringify(error)];
+      errors.push(`${entry.arn} - ${errorType}: ${errorText}`);
     }
   }
-
+  if (errors.length > 0) {
+    throw new SopsError(`Failed to get key: \n  ${errors.join("\n  ")}`);
+  }
   return null;
 }
 

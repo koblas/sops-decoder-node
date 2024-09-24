@@ -5,3 +5,4 @@ npm-debug.log
 .DS_Store
 build
 secure.enc.json
+/coverage
