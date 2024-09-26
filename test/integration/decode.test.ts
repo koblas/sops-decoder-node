@@ -1,11 +1,11 @@
-import { deepEqual } from "assert";
+import * as assert from "assert";
 import { execFile } from "child_process";
 import { randomUUID } from "crypto";
 import * as test from "node:test";
 import { tmpdir } from "os";
 import * as path from "path";
 import { decodeFile } from "../../src/decode";
-import { rm, writeFile } from "fs/promises";
+import { readFile, rm, writeFile } from "fs/promises";
 
 const mustEnv = (name: string) => {
   const value = process.env[name];
@@ -26,12 +26,14 @@ type SopsArgs = {
     unencrypted_regex?: string;
     encrypted_regex?: string;
   };
+  macOnlyEncrypted?: boolean;
 };
 
 const createEncryptedFile = async ({
   data,
   encryptionMethod,
   keyEncryptionBasis,
+  macOnlyEncrypted,
 }: SopsArgs) => {
   const filepath = path.join(tmpdir(), `${randomUUID()}.json`);
   const opts: string[] = [];
@@ -50,6 +52,9 @@ const createEncryptedFile = async ({
   if (keyEncryptionBasis.encrypted_regex) {
     opts.push("--encrypted-regex", keyEncryptionBasis.encrypted_regex);
   }
+  if (macOnlyEncrypted) {
+    opts.push("--mac-only-encrypted");
+  }
   await writeFile(filepath, JSON.stringify(data));
   const child = execFile("sops", [...opts, "-e", "-i", filepath]);
   await new Promise((res, rej) =>
@@ -59,7 +64,7 @@ const createEncryptedFile = async ({
   return filepath;
 };
 
-test.test("decodeFile", { concurrency: true, timeout: 1000 }, async (t) => {
+test.test("decodeFile", { concurrency: true, timeout: 2000 }, async (t) => {
   //  We cannot test without this
   if (!process.env["KMS_KEY_ARN"]) {
     return;
@@ -103,9 +108,8 @@ test.test("decodeFile", { concurrency: true, timeout: 1000 }, async (t) => {
     myObject_encrypted: simpleObject,
   };
 
-  const encryptionMethods: SopsArgs["encryptionMethod"][] = [
-    { kms: [mustEnv("KMS_KEY_ARN")] },
-  ];
+  const kmsEncryption = { kms: [mustEnv("KMS_KEY_ARN")] };
+  const encryptionMethods: SopsArgs["encryptionMethod"][] = [kmsEncryption];
   const keyEncryptionBases: SopsArgs["keyEncryptionBasis"][] = [
     { unencrypted_suffix: "_plain" },
     { encrypted_suffix: "_encrypted" },
@@ -125,7 +129,7 @@ test.test("decodeFile", { concurrency: true, timeout: 1000 }, async (t) => {
     t.test(
       "key encryption bases (arbitrarily choosing encryption method)",
       async (t) => {
-        const encryptionMethod = encryptionMethods[0];
+        const encryptionMethod = kmsEncryption;
         await Promise.all(
           keyEncryptionBases.map((keyEncryptionBasis) =>
             t.test(`using ${JSON.stringify(keyEncryptionBasis)}`, async (t) => {
@@ -138,7 +142,7 @@ test.test("decodeFile", { concurrency: true, timeout: 1000 }, async (t) => {
                       keyEncryptionBasis,
                     });
                     const decoded = await decodeFile(filepath);
-                    deepEqual(decoded, data);
+                    assert.deepEqual(decoded, data);
                   }),
                 ),
               );
@@ -165,7 +169,7 @@ test.test("decodeFile", { concurrency: true, timeout: 1000 }, async (t) => {
                         keyEncryptionBasis,
                       });
                       const decoded = await decodeFile(filepath);
-                      deepEqual(decoded, data);
+                      assert.deepEqual(decoded, data);
                     }),
                   ),
                 );
@@ -175,5 +179,60 @@ test.test("decodeFile", { concurrency: true, timeout: 1000 }, async (t) => {
         );
       },
     ),
+    t.test("mac only encrypted", async (t) => {
+      const encryptionMethod = kmsEncryption;
+      const keyEncryptionBasis = { encrypted_suffix: "a" };
+      type Data = { a: string; b: number };
+      const data: Data = { a: "string", b: 2 };
+      const options = [
+        { macOnlyEncrypted: true, changes: true, error: false },
+        { macOnlyEncrypted: true, changes: false, error: false },
+        { macOnlyEncrypted: false, changes: true, error: true },
+        { macOnlyEncrypted: false, changes: false, error: false },
+      ] as const;
+      await Promise.all(
+        options.map(({ macOnlyEncrypted, changes, error }) =>
+          t.test(
+            `${macOnlyEncrypted ? "enabled" : "disabled"}, ${
+              changes ? "with" : "without"
+            } changes to unencrypted data, ${
+              error ? "expecting error" : "expecting success"
+            }`,
+            async (t) => {
+              const filepath = await createEncryptedFile({
+                data,
+                encryptionMethod,
+                keyEncryptionBasis,
+                macOnlyEncrypted,
+              });
+              if (changes) {
+                const fileContents = JSON.parse(
+                  await readFile(filepath, "utf8"),
+                ) as Data;
+                fileContents.b = 42;
+                await writeFile(filepath, JSON.stringify(fileContents));
+              }
+              if (error) {
+                try {
+                  await decodeFile(filepath);
+                  throw new Error("expected an error");
+                } catch (e) {
+                  assert(
+                    e instanceof Error && e.message.includes("Hash mismatch"),
+                    "expected a hash-mismatch error",
+                  );
+                }
+              } else {
+                const decoded = (await decodeFile(filepath)) as Data;
+                assert(
+                  decoded.b === (changes ? 42 : data.b),
+                  "expected the decoded data to match the file contents",
+                );
+              }
+            },
+          ),
+        ),
+      );
+    }),
   ]);
 });

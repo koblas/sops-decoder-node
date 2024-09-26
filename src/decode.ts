@@ -5,6 +5,16 @@ import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { DecryptCommand, KMSClient } from "@aws-sdk/client-kms";
 
 const UNENCRYPTED_SUFFIX = "_unencrypted";
+/**
+ *  used to assure that MACs created with mac_only_encrypted
+ *  are unique from those created without it.
+ *
+ *      const value = crypto.createHash('sha256').update('sops').digest();
+ */
+const MAC_ONLY_ENCRYPTED_INITIALIZATION = Buffer.from(
+  "8a3fd2ad54ce66527b1034f3d147be0b0b975b3bf44f72c6fdadec8176f27d69",
+  "hex",
+);
 
 // Why doesn't the JSON methods return this...
 export type Json = string | number | boolean | null | JsonObject | JsonArray;
@@ -33,6 +43,7 @@ export interface SopsMetadata {
   encrypted_suffix?: string;
   unencrypted_regex?: string;
   encrypted_regex?: string;
+  mac_only_encrypted?: boolean;
 }
 
 export interface EncodedTree {
@@ -100,7 +111,12 @@ export async function decrypt(tree: JsonObject) {
 
   const digest = crypto.createHash("sha512");
 
-  const result = walkAndDecrypt(tree, key, "", digest, [], shouldBeEncrypted);
+  const macOnlyEncrypted = sops.mac_only_encrypted;
+  if (macOnlyEncrypted) {
+    digest.update(MAC_ONLY_ENCRYPTED_INITIALIZATION);
+  }
+  const settings = { key, digest, shouldBeEncrypted, macOnlyEncrypted };
+  const result = walkAndDecrypt(tree, [], settings);
 
   if (sops.mac) {
     const hash = String(decryptScalar(sops.mac, key, sops.lastmodified));
@@ -188,43 +204,42 @@ export function decryptScalar(
   }
 }
 
+interface WalkSettings {
+  key: Uint8Array;
+  digest: crypto.Hash;
+  shouldBeEncrypted: EncryptionModifier;
+  macOnlyEncrypted?: boolean;
+}
+
 function walkAndDecrypt(
   value: Json,
-  key: Uint8Array,
-  aad: string,
-  digest: crypto.Hash,
   path: string[],
-  shouldBeEncrypted: EncryptionModifier,
+  settings: WalkSettings,
 ): unknown {
+  const { key, digest, shouldBeEncrypted, macOnlyEncrypted } = settings;
   if (value === null) {
     return value;
   }
   if (Array.isArray(value)) {
-    return value.map((innerValue) =>
-      walkAndDecrypt(innerValue, key, aad, digest, path, shouldBeEncrypted),
-    );
+    return value.map((v) => walkAndDecrypt(v, path, settings));
   }
   if (typeof value === "object") {
-    return Object.fromEntries(Object.entries(value)
-      .filter(([k, v]) => v !== undefined && (path.length > 0 || k !== "sops"))
-      .map(([k, innerValue]) => [
-        k,
-        walkAndDecrypt(
-          innerValue,
-          key,
-          `${aad}${k}:`,
-          digest,
-          [...path, k],
-          shouldBeEncrypted,
-        )
-      ]));
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([k, v]) => v !== undefined && (path.length || k !== "sops"))
+        .map(([k, v]) => [k, walkAndDecrypt(v, [...path, k], settings)]),
+    );
   }
-  const plaintext = typeof value === 'string' && shouldBeEncrypted(path)
-    ? decryptScalar(value, key, aad)
-    : value;
-  digest.update(toBytes(plaintext));
+  const isEncrypted = shouldBeEncrypted(path);
+  const plaintext =
+    typeof value === "string" && isEncrypted
+      ? decryptScalar(value, key, path.join(":") + ":")
+      : value;
+  if (!macOnlyEncrypted || isEncrypted) {
+    digest.update(toBytes(plaintext));
+  }
   return plaintext;
-};
+}
 
 /**
  * Get the key from the 'sops.kms' node of the tree
@@ -250,7 +265,9 @@ async function getKey(tree: EncodedTree): Promise<Uint8Array | null> {
   for (const entry of kmsTree) {
     try {
       if (!entry.enc || !entry.arn) {
-        throw new SopsError(`Invalid format for KMS node: ${JSON.stringify(entry)}`);
+        throw new SopsError(
+          `Invalid format for KMS node: ${JSON.stringify(entry)}`,
+        );
       }
 
       // eslint-disable-next-line no-await-in-loop
@@ -269,8 +286,11 @@ async function getKey(tree: EncodedTree): Promise<Uint8Array | null> {
       }
 
       return response.Plaintext;
-    } catch(error) {
-      const [errorType, errorText] = error instanceof Error ? [error.name, error.message] : ['UnknownError', JSON.stringify(error)];
+    } catch (error) {
+      const [errorType, errorText] =
+        error instanceof Error
+          ? [error.name, error.message]
+          : ["UnknownError", JSON.stringify(error)];
       errors.push(`${entry.arn} - ${errorType}: ${errorText}`);
     }
   }
