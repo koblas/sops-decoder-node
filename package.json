@@ -9,7 +9,7 @@
     "secure"
   ],
   "scripts": {
-    "test": "true",
+    "test": "c8 node --require ts-node/register --test test/integration/*.test.ts",
     "lint": "eslint src --ext .ts",
     "build": "tsc"
   },
@@ -48,6 +48,7 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^20.4.1",
+    "c8": "^10.1.2",
     "eslint": "^8.44.0",
     "eslint-config-airbnb-typescript": "^17.0.0",
     "eslint-config-prettier": "^8.1.0",
