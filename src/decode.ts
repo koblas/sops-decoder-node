@@ -310,9 +310,9 @@ async function getAwsSessionForEntry(entry: {
 }): Promise<KMSClient> {
   // extract the region from the ARN
   // arn:aws:kms:{REGION}:...
-  const res = entry.arn.match(/^arn:aws:kms:(.+):([0-9]+):key\/(.+)$/);
+  const res = entry.arn.match(/^arn:aws:kms:(.+):([0-9]+):(key|alias)\/(.+)$/);
 
-  if (!res || res.length < 4) {
+  if (!res || res.length < 5) {
     throw new SopsError(`Invalid ARN ${entry.arn} insufficent components`);
   }
 
